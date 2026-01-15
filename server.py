@@ -4,6 +4,9 @@ import asyncio
 
 mtch_engine = MatchingEngine()
 mtch_engine.add_market(1)
+mtch_engine.add_account(user_id = 1)
+mtch_engine.add_account(user_id = 2)
+mtch_engine.add_account(user_id = 3)
 asyncio.run(mtch_engine.run())
 
 
