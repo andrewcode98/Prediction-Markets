@@ -8,7 +8,7 @@ import asyncio
 class Order():
     def __init__(self, id:int, user_id:int, market_id:int, price:float, side:str, order_type:str, quantity:int, time_submitted:datetime):
         # side -> Buy/Sell as B/S
-        # type -> Limit/Market as L/M
+        # type -> Limit/Market/Cancel as L/M/C
         self.id = id
         self.market_id = market_id
         self.price = price
@@ -91,6 +91,18 @@ class OrderBook():
             self.match_market_buy_order(order)
         else:
             self.match_market_sell_order(order)
+
+    def cancel_order(self, order:Order):
+        ob = self.bids if order.side == "B" else self.asks
+        if ob and order.price in ob:
+           queue = ob[order.price]
+           for i in range(len(queue)):
+               queue_order = queue[i]
+               # Condition to find the order
+               if order.id == queue_order.id and order.user_id == queue_order.user_id:
+                   del queue[i]
+                   return True
+        return False
         
 
 
@@ -115,14 +127,18 @@ class MatchingEngine():
             order_id += 1
             order2 = Order(id = order_id, user_id = 2, market_id=market_id, price = 105.00, side = "S",  order_type = "L", quantity=100, time_submitted=datetime.now(timezone.utc))
             order_id += 1
-            order3 = Order(id = order_id, user_id = 3, market_id=market_id, price = None, side = "B",  order_type = "M", quantity=50, time_submitted=datetime.now(timezone.utc))
+            order3 = Order(id = order_id, user_id = 3, market_id=market_id, price = None, side = "S",  order_type = "M", quantity=50, time_submitted=datetime.now(timezone.utc))
+            order_id += 1
+            order4 = Order(id = order_id - 2, user_id = 2, market_id=market_id, price = 105.00, side = "S",  order_type = "C", quantity=None, time_submitted=datetime.now(timezone.utc))
             order_id += 1
             await self.queues[market_id].put(order1)
             await self.queues[market_id].put(order2)
             await self.queues[market_id].put(order3)
+            await self.queues[market_id].put(order4)
             print(f"Submitted order {order1.id} to market {market_id}")
             print(f"Submitted order {order2.id} to market {market_id}")
             print(f"Submitted order {order3.id} to market {market_id}")
+            print(f"Submitted order {order4.id} to market {market_id}")
             await asyncio.sleep(5)
             
 
@@ -139,11 +155,20 @@ class MatchingEngine():
                 ob.match_market_order(order)
                 print(f"Market order id {order.id} executed!")
                 continue
+            # If its a cancel order match the order id and cancel it
+            if order.order_type == "C":
+               if ob.cancel_order(order):
+                   print(f"Market order id {order.id} cancelled succesfuly")
+                   continue
+               else:
+                   print(f"Market order id {order.id} has not been cancelled succesfuly")
+                   continue
+                
             # Limit sell order placed
             if order.side == "S":
                 if best_bid is None or order.price > best_bid:
                     ob.add_order(order)
-                    print(f"Market[{market_id}] LIMIT SELL {order.id} added @ {order.price}")
+                    print(f"Market[{market_id}] LIMIT SELL order id {order.id} added @ {order.price}")
                 else:
                     ob.match_market_order(order)
                     print(f"Market order id {order.id} executed!")
@@ -151,7 +176,7 @@ class MatchingEngine():
             elif order.side == "B":
                 if best_ask is None or order.price < best_ask:
                     ob.add_order(order)
-                    print(f"Market[{market_id}] LIMIT BUY {order.id} added @ {order.price}")
+                    print(f"Market[{market_id}] LIMIT BUY order id {order.id} added @ {order.price}")
                 else:
                     ob.match_market_order(order)
                     print(f"Market order id {order.id} executed!")
