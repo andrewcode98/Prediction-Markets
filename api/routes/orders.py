@@ -1,10 +1,9 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
+from api.deps import get_engine
 from engine.matching_engine import MatchingEngine
-import asyncio
 
-app = FastAPI()
-engine = MatchingEngine()
+router = APIRouter(prefix="/orders", tags=["orders"])
 
 class OrderRequest(BaseModel):
     user_id: int
@@ -14,18 +13,17 @@ class OrderRequest(BaseModel):
     quantity: int
     order_type: str
 
-@app.post("/orders")
-def sumbit_order(req: OrderRequest):
+@router.post("")
+async def sumbit_order(req: OrderRequest, engine: MatchingEngine = Depends(get_engine)):
     if req.user_id not in engine.accounts:
         raise HTTPException(status_code=404, detail = "User not found")
 
-    order_id = engine.submit_order(user_id = req.user_id, market_id = req.market_id, order_data = req.dict())
+    order_id = await engine.submit_order(user_id = req.user_id, market_id = req.market_id, order_data = req.dict())
     return {"status":"accepted",
             "order_id": order_id}
 
-# Test function to see if we can get details of order submitted
-@app.get("/orders/{user_id}")
-def get_user_orders(user_id:int):
+@router.get("/{user_id}")
+def get_user_orders(user_id:int, engine: MatchingEngine = Depends(get_engine)):
     if user_id not in engine.accounts:
         raise HTTPException(status_code=404, detail="User not found")
     account = engine.accounts[user_id]
@@ -42,12 +40,3 @@ def get_user_orders(user_id:int):
         }) 
     return {"positions":  orders_list}
 
-@app.on_event("startup")
-async def startup_event():
-    asyncio.create_task(engine.run())
-
-
-engine.add_market(1)
-engine.add_account(user_id = 1)
-engine.add_account(user_id = 2)
-engine.add_account(user_id = 3)
